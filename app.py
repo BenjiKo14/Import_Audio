@@ -94,24 +94,80 @@ def extract():
 
             status_data['step'] = "Récupération du lien et du timing..."
 
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': audio_output_path,
-                'progress_hooks': [progress_hook],
-                'prefer_ffmpeg': True,
-                'postprocessor_args': {
-                    'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                },
-                'cookiefile': resource_path('cookies.txt'),
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '128',
-                }]
-            }
+            # Essayer différentes méthodes d'authentification
+            browsers_to_try = [
+                ('chrome',),
+                ('firefox',),
+                ('edge',),
+                ('safari',),
+            ]
+            
+            downloaded = False
+            for browser in browsers_to_try:
+                try:
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'outtmpl': audio_output_path,
+                        'progress_hooks': [progress_hook],
+                        'prefer_ffmpeg': True,
+                        'postprocessor_args': {
+                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                        },
+                        'cookiesfrombrowser': browser,
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                            'preferredquality': '128',
+                        }]
+                    }
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                    downloaded = True
+                    break
+                except Exception as e:
+                    continue
+            
+            # Si aucun navigateur ne fonctionne, essayer avec le fichier cookies.txt
+            if not downloaded:
+                try:
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'outtmpl': audio_output_path,
+                        'progress_hooks': [progress_hook],
+                        'prefer_ffmpeg': True,
+                        'postprocessor_args': {
+                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                        },
+                        'cookiefile': resource_path('cookies.txt'),
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                            'preferredquality': '128',
+                        }]
+                    }
+
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                except Exception as e:
+                    # En dernier recours, essayer sans cookies
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'outtmpl': audio_output_path,
+                        'progress_hooks': [progress_hook],
+                        'prefer_ffmpeg': True,
+                        'postprocessor_args': {
+                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                        },
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                            'preferredquality': '128',
+                        }]
+                    }
+
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
 
             if not os.path.exists(downloaded_file_path):
                 raise Exception("Fichier MP3 non trouvé après le téléchargement.")
