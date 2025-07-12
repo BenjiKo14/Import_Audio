@@ -31,7 +31,6 @@ app = Flask(
 
 progress_data = {'percent': '0%'}
 status_data = {'step': 'En attente...'}
-last_ping = time.time()
 temp_audio_path = None  # fichier temporaire
 
 def clean_ansi(text):
@@ -57,12 +56,6 @@ def progress():
 @app.route('/status')
 def status():
     return jsonify(status_data)
-
-@app.route('/ping', methods=['POST'])
-def ping():
-    global last_ping
-    last_ping = time.time()
-    return '', 204
 
 @app.route('/extract', methods=['POST'])
 def extract():
@@ -309,15 +302,6 @@ def download():
 
     return "Fichier introuvable", 404
 
-def monitor_browser():
-    global last_ping
-    while True:
-        time.sleep(5)
-        if time.time() - last_ping > 10:
-            print("Navigateur fermé. Arrêt du serveur...")
-            os._exit(0)
-
 if __name__ == '__main__':
-    threading.Thread(target=monitor_browser, daemon=True).start()
     threading.Timer(1, open_browser).start()
     app.run(debug=False)
