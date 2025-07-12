@@ -96,7 +96,7 @@ def extract():
 
             # Méthodes d'authentification à essayer dans l'ordre de priorité
             methods_to_try = [
-                # Méthode 1: Client Android (souvent le plus efficace)
+                # Méthode 1: Client iOS (fonctionne bien sans PO Token)
                 {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
@@ -112,12 +112,31 @@ def extract():
                     }],
                     'extractor_args': {
                         'youtube': {
-                            'player_client': ['android'],
-                            'skip': ['dash', 'hls']
+                            'player_client': ['ios']
                         }
                     }
                 },
-                # Méthode 2: Avec cookies du navigateur
+                # Méthode 2: Client web basique
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['web']
+                        }
+                    }
+                },
+                # Méthode 3: Avec cookies du navigateur
                 {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
@@ -135,26 +154,6 @@ def extract():
                     'extractor_args': {
                         'youtube': {
                             'player_client': ['web']
-                        }
-                    }
-                },
-                # Méthode 3: Client iOS
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['ios']
                         }
                     }
                 }
