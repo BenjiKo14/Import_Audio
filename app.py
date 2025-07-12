@@ -57,93 +57,115 @@ def get_random_user_agent():
     ]
     return random.choice(agents)
 
-def download_youtube_audio(url, output_path):
+def download_youtube_audio(url, output_dir):
     """Télécharge l'audio depuis YouTube avec des techniques anti-détection avancées"""
     
-    # Configuration optimisée avec rotation d'IP simulée
-    ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best',
-        'outtmpl': output_path,
-        'extractaudio': True,
-        'audioformat': 'mp3',
-        'audioquality': '128K',
-        'no_warnings': True,
-        'ignoreerrors': True,
-        'progress_hooks': [progress_hook],
-        
-        # Headers anti-détection
-        'http_headers': {
-            'User-Agent': get_random_user_agent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
+    # Méthodes alternatives à essayer
+    methods = [
+        # Méthode 1: Configuration basique sans postprocessors
+        {
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'extract_flat': False,
+            'writethumbnail': False,
+            'writeinfojson': False,
+            'http_headers': {
+                'User-Agent': get_random_user_agent(),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web'],
+                    'skip': ['dash', 'hls'],
+                }
+            },
+            'sleep_interval': random.uniform(1, 3),
         },
         
-        # Options anti-détection avancées
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'android', 'ios'],
-                'player_skip': ['configs'],
-                'skip': ['dash', 'hls'],
-                'lang': ['en'],
-            }
+        # Méthode 2: Client mobile iOS
+        {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'http_headers': {
+                'User-Agent': 'com.google.ios.youtube/19.30.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios'],
+                }
+            },
+            'sleep_interval': random.uniform(1, 2),
         },
         
-        # Throttling pour simuler comportement humain
-        'sleep_interval': random.uniform(0.5, 2.0),
-        'max_sleep_interval': 4,
-        'sleep_interval_requests': random.uniform(0.5, 1.5),
+        # Méthode 3: Client TV embedded
+        {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1',
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['tv_embedded'],
+                }
+            },
+            'sleep_interval': 1,
+        },
         
-        # Retry avec backoff
-        'retries': 3,
-        'fragment_retries': 3,
-        'retry_sleep_functions': {'extractor': lambda n: 2 ** n},
-    }
+        # Méthode 4: Avec cookies
+        {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'cookiefile': resource_path('cookies.txt') if os.path.exists(resource_path('cookies.txt')) else None,
+            'http_headers': {
+                'User-Agent': get_random_user_agent(),
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web'],
+                }
+            },
+            'sleep_interval': random.uniform(2, 4),
+        }
+    ]
     
-    print(f"[INFO] Tentative de téléchargement avec User-Agent: {ydl_opts['http_headers']['User-Agent'][:50]}...")
-    
-    try:
-        # Première tentative avec configuration standard
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        return True
+    for i, ydl_opts in enumerate(methods):
+        # Supprimer les options None
+        ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
         
-    except Exception as e:
-        print(f"[WARN] Méthode standard échouée: {str(e)[:100]}...")
-        
-        # Tentative avec client mobile uniquement
         try:
-            ydl_opts['extractor_args']['youtube']['player_client'] = ['android']
-            ydl_opts['http_headers']['User-Agent'] = 'com.google.android.youtube/19.30.1 (Linux; U; Android 13)'
+            print(f"[INFO] Méthode {i+1}/4: {ydl_opts['extractor_args']['youtube']['player_client'][0]}")
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-            return True
             
-        except Exception as e2:
-            print(f"[WARN] Méthode mobile échouée: {str(e2)[:100]}...")
+            # Vérifier si le fichier a été créé
+            downloaded_files = []
+            for f in os.listdir(output_dir):
+                if f.startswith('audio.') and os.path.getsize(os.path.join(output_dir, f)) > 0:
+                    downloaded_files.append(os.path.join(output_dir, f))
             
-            # Dernière tentative avec cookies si disponibles
-            try:
-                cookies_file = resource_path('cookies.txt')
-                if os.path.exists(cookies_file):
-                    ydl_opts['cookiefile'] = cookies_file
-                    ydl_opts['extractor_args']['youtube']['player_client'] = ['web']
-                    ydl_opts['http_headers']['User-Agent'] = get_random_user_agent()
-                    
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-                    return True
-                else:
-                    raise Exception("Toutes les méthodes ont échoué")
-                    
-            except Exception as e3:
-                print(f"[ERROR] Toutes les méthodes échouées: {str(e3)[:100]}...")
-                raise Exception("Impossible de télécharger la vidéo. YouTube bloque temporairement les téléchargements.")
+            if downloaded_files:
+                print(f"[SUCCESS] Fichier téléchargé: {downloaded_files[0]}")
+                return downloaded_files[0]
+            
+        except Exception as e:
+            print(f"[WARN] Méthode {i+1} échouée: {str(e)[:100]}...")
+            # Attendre avant d'essayer la méthode suivante
+            time.sleep(random.uniform(1, 3))
+            continue
+    
+    # Si toutes les méthodes échouent
+    raise Exception("Impossible de télécharger la vidéo. YouTube bloque temporairement les téléchargements.")
 
 def cut_audio_ffmpeg(input_path, output_path, start_time, end_time):
     """Découpe l'audio avec ffmpeg"""
@@ -229,23 +251,12 @@ def extract():
         with tempfile.TemporaryDirectory() as temp_dir:
             # Téléchargement
             status_data['step'] = 'Téléchargement de la vidéo... 📥'
-            temp_audio_file = os.path.join(temp_dir, 'audio.%(ext)s')
             
-            if not download_youtube_audio(url, temp_audio_file):
-                raise Exception("Échec du téléchargement")
+            # Télécharger l'audio
+            input_audio = download_youtube_audio(url, temp_dir)
             
-            # Recherche du fichier téléchargé
-            downloaded_files = []
-            for ext in ['mp3', 'm4a', 'webm', 'ogg']:
-                pattern = os.path.join(temp_dir, f'audio.{ext}')
-                found = [f for f in os.listdir(temp_dir) if f.startswith('audio.')]
-                if found:
-                    downloaded_files.extend([os.path.join(temp_dir, f) for f in found])
-            
-            if not downloaded_files:
-                raise Exception("Fichier audio non trouvé après téléchargement")
-            
-            input_audio = downloaded_files[0]
+            if not input_audio or not os.path.exists(input_audio):
+                raise Exception("Échec du téléchargement ou fichier non trouvé")
             
             # Découpage
             status_data['step'] = 'Découpage de l\'extrait... ✂️'
