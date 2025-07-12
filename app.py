@@ -94,80 +94,87 @@ def extract():
 
             status_data['step'] = "Récupération du lien et du timing..."
 
-            # Essayer différentes méthodes d'authentification
-            browsers_to_try = [
-                ('chrome',),
-                ('firefox',),
-                ('edge',),
-                ('safari',),
+            # Méthodes d'authentification à essayer dans l'ordre de priorité
+            methods_to_try = [
+                # Méthode 1: Client Android (souvent le plus efficace)
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android'],
+                            'skip': ['dash', 'hls']
+                        }
+                    }
+                },
+                # Méthode 2: Avec cookies du navigateur
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'cookiesfrombrowser': ('chrome',),
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['web']
+                        }
+                    }
+                },
+                # Méthode 3: Client iOS
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['ios']
+                        }
+                    }
+                }
             ]
             
             downloaded = False
-            for browser in browsers_to_try:
+            for i, ydl_opts in enumerate(methods_to_try):
                 try:
-                    ydl_opts = {
-                        'format': 'bestaudio/best',
-                        'outtmpl': audio_output_path,
-                        'progress_hooks': [progress_hook],
-                        'prefer_ffmpeg': True,
-                        'postprocessor_args': {
-                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                        },
-                        'cookiesfrombrowser': browser,
-                        'postprocessors': [{
-                            'key': 'FFmpegExtractAudio',
-                            'preferredcodec': 'mp3',
-                            'preferredquality': '128',
-                        }]
-                    }
-
+                    print(f"Essai de la méthode {i+1}...")
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
                     downloaded = True
+                    print(f"Succès avec la méthode {i+1}")
                     break
                 except Exception as e:
+                    print(f"Méthode {i+1} échouée: {str(e)}")
                     continue
             
-            # Si aucun navigateur ne fonctionne, essayer avec le fichier cookies.txt
             if not downloaded:
-                try:
-                    ydl_opts = {
-                        'format': 'bestaudio/best',
-                        'outtmpl': audio_output_path,
-                        'progress_hooks': [progress_hook],
-                        'prefer_ffmpeg': True,
-                        'postprocessor_args': {
-                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                        },
-                        'cookiefile': resource_path('cookies.txt'),
-                        'postprocessors': [{
-                            'key': 'FFmpegExtractAudio',
-                            'preferredcodec': 'mp3',
-                            'preferredquality': '128',
-                        }]
-                    }
-
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-                except Exception as e:
-                    # En dernier recours, essayer sans cookies
-                    ydl_opts = {
-                        'format': 'bestaudio/best',
-                        'outtmpl': audio_output_path,
-                        'progress_hooks': [progress_hook],
-                        'prefer_ffmpeg': True,
-                        'postprocessor_args': {
-                            'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                        },
-                        'postprocessors': [{
-                            'key': 'FFmpegExtractAudio',
-                            'preferredcodec': 'mp3',
-                            'preferredquality': '128',
-                        }]
-                    }
-
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
+                raise Exception("Toutes les méthodes de téléchargement ont échoué")
 
             if not os.path.exists(downloaded_file_path):
                 raise Exception("Fichier MP3 non trouvé après le téléchargement.")
