@@ -10,6 +10,9 @@ import tempfile
 import subprocess
 import random
 from datetime import datetime
+import requests
+import json
+from urllib.parse import parse_qs, urlparse
 
 # Configuration pour le chemin des ressources
 def resource_path(relative_path):
@@ -57,115 +60,193 @@ def get_random_user_agent():
     ]
     return random.choice(agents)
 
-def download_youtube_audio(url, output_dir):
-    """Télécharge l'audio depuis YouTube avec des techniques anti-détection avancées"""
+def extract_video_id(url):
+    """Extrait l'ID de la vidéo depuis l'URL YouTube"""
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'(?:embed\/)([0-9A-Za-z_-]{11})',
+        r'(?:watch\?v=)([0-9A-Za-z_-]{11})',
+        r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
+    ]
     
-    # Méthodes alternatives à essayer
-    methods = [
-        # Méthode 1: Configuration basique sans postprocessors
-        {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def download_with_cobalt_api(video_id, output_dir):
+    """Télécharge avec l'API Cobalt (co.wuk.sh)"""
+    try:
+        api_url = "https://co.wuk.sh/api/json"
+        headers = {
+            'User-Agent': get_random_user_agent(),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+        
+        payload = {
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "vCodec": "mp3",
+            "vQuality": "128",
+            "aFormat": "mp3",
+            "isAudioOnly": True
+        }
+        
+        print("[INFO] Tentative avec Cobalt API...")
+        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'success' and data.get('url'):
+                audio_url = data['url']
+                return download_file_from_url(audio_url, output_dir, 'audio.mp3')
+                
+    except Exception as e:
+        print(f"[WARN] Cobalt API échouée: {str(e)[:100]}...")
+    
+    return None
+
+def download_with_invidious_api(video_id, output_dir):
+    """Télécharge avec l'API Invidious"""
+    invidious_instances = [
+        "https://invidious.fdn.fr",
+        "https://inv.riverside.rocks",
+        "https://invidious.snopyta.org",
+        "https://invidious.kavin.rocks",
+        "https://vid.puffyan.us"
+    ]
+    
+    for instance in invidious_instances:
+        try:
+            print(f"[INFO] Tentative avec Invidious: {instance}")
+            
+            # Obtenir les informations de la vidéo
+            api_url = f"{instance}/api/v1/videos/{video_id}"
+            headers = {'User-Agent': get_random_user_agent()}
+            
+            response = requests.get(api_url, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Rechercher le meilleur format audio
+                audio_formats = [f for f in data.get('adaptiveFormats', []) if f.get('type', '').startswith('audio/')]
+                
+                if audio_formats:
+                    # Prendre le format avec la meilleure qualité
+                    best_audio = max(audio_formats, key=lambda x: x.get('bitrate', 0))
+                    audio_url = best_audio['url']
+                    
+                    return download_file_from_url(audio_url, output_dir, 'audio.mp4')
+                    
+        except Exception as e:
+            print(f"[WARN] Invidious {instance} échoué: {str(e)[:100]}...")
+            continue
+    
+    return None
+
+def download_file_from_url(url, output_dir, filename):
+    """Télécharge un fichier depuis une URL"""
+    try:
+        headers = {
+            'User-Agent': get_random_user_agent(),
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+        }
+        
+        print(f"[INFO] Téléchargement du fichier audio...")
+        
+        response = requests.get(url, headers=headers, stream=True, timeout=60)
+        response.raise_for_status()
+        
+        file_path = os.path.join(output_dir, filename)
+        
+        with open(file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            print(f"[SUCCESS] Fichier téléchargé: {file_path}")
+            return file_path
+        
+    except Exception as e:
+        print(f"[WARN] Téléchargement direct échoué: {str(e)[:100]}...")
+    
+    return None
+
+def download_with_yt_dlp_fallback(url, output_dir):
+    """Méthode de fallback avec yt-dlp (version simplifiée)"""
+    try:
+        print("[INFO] Tentative avec yt-dlp (fallback)...")
+        
+        ydl_opts = {
+            'format': 'bestaudio/best',
             'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
             'progress_hooks': [progress_hook],
             'extract_flat': False,
-            'writethumbnail': False,
-            'writeinfojson': False,
-            'http_headers': {
-                'User-Agent': get_random_user_agent(),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['web'],
-                    'skip': ['dash', 'hls'],
-                }
-            },
-            'sleep_interval': random.uniform(1, 3),
-        },
-        
-        # Méthode 2: Client mobile iOS
-        {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
-            'progress_hooks': [progress_hook],
-            'http_headers': {
-                'User-Agent': 'com.google.ios.youtube/19.30.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['ios'],
-                }
-            },
-            'sleep_interval': random.uniform(1, 2),
-        },
-        
-        # Méthode 3: Client TV embedded
-        {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
-            'progress_hooks': [progress_hook],
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1',
-            },
+            'no_warnings': True,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['tv_embedded'],
                 }
             },
-            'sleep_interval': 1,
-        },
-        
-        # Méthode 4: Avec cookies
-        {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
-            'progress_hooks': [progress_hook],
-            'cookiefile': resource_path('cookies.txt') if os.path.exists(resource_path('cookies.txt')) else None,
             'http_headers': {
-                'User-Agent': get_random_user_agent(),
+                'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1',
             },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['web'],
-                }
-            },
-            'sleep_interval': random.uniform(2, 4),
         }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        # Vérifier si le fichier a été créé
+        for f in os.listdir(output_dir):
+            if f.startswith('audio.') and os.path.getsize(os.path.join(output_dir, f)) > 0:
+                return os.path.join(output_dir, f)
+                
+    except Exception as e:
+        print(f"[WARN] yt-dlp fallback échoué: {str(e)[:100]}...")
+    
+    return None
+
+def download_youtube_audio(url, output_dir):
+    """Télécharge l'audio depuis YouTube en utilisant plusieurs APIs"""
+    
+    # Extraire l'ID de la vidéo
+    video_id = extract_video_id(url)
+    if not video_id:
+        raise Exception("Impossible d'extraire l'ID de la vidéo depuis l'URL")
+    
+    print(f"[INFO] ID de la vidéo: {video_id}")
+    
+    # Essayer différentes méthodes dans l'ordre
+    methods = [
+        ("Cobalt API", lambda: download_with_cobalt_api(video_id, output_dir)),
+        ("Invidious API", lambda: download_with_invidious_api(video_id, output_dir)),
+        ("yt-dlp fallback", lambda: download_with_yt_dlp_fallback(url, output_dir)),
     ]
     
-    for i, ydl_opts in enumerate(methods):
-        # Supprimer les options None
-        ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
-        
+    for method_name, method_func in methods:
         try:
-            print(f"[INFO] Méthode {i+1}/4: {ydl_opts['extractor_args']['youtube']['player_client'][0]}")
+            print(f"[INFO] === Essai avec {method_name} ===")
+            result = method_func()
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-            
-            # Vérifier si le fichier a été créé
-            downloaded_files = []
-            for f in os.listdir(output_dir):
-                if f.startswith('audio.') and os.path.getsize(os.path.join(output_dir, f)) > 0:
-                    downloaded_files.append(os.path.join(output_dir, f))
-            
-            if downloaded_files:
-                print(f"[SUCCESS] Fichier téléchargé: {downloaded_files[0]}")
-                return downloaded_files[0]
-            
+            if result and os.path.exists(result):
+                print(f"[SUCCESS] ✅ {method_name} a réussi!")
+                return result
+            else:
+                print(f"[WARN] ❌ {method_name} n'a pas produit de fichier")
+                
         except Exception as e:
-            print(f"[WARN] Méthode {i+1} échouée: {str(e)[:100]}...")
-            # Attendre avant d'essayer la méthode suivante
-            time.sleep(random.uniform(1, 3))
-            continue
+            print(f"[WARN] ❌ {method_name} échoué: {str(e)[:100]}...")
+        
+        # Attendre entre les tentatives
+        time.sleep(random.uniform(1, 3))
     
     # Si toutes les méthodes échouent
-    raise Exception("Impossible de télécharger la vidéo. YouTube bloque temporairement les téléchargements.")
+    raise Exception("Toutes les méthodes de téléchargement ont échoué. Le contenu pourrait être protégé ou temporairement indisponible.")
 
 def cut_audio_ffmpeg(input_path, output_path, start_time, end_time):
     """Découpe l'audio avec ffmpeg"""
