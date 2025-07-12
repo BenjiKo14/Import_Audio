@@ -94,35 +94,144 @@ def extract():
 
             status_data['step'] = "Récupération du lien et du timing..."
 
-            # Méthode Android optimisée (la seule qui fonctionne)
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': audio_output_path,
-                'progress_hooks': [progress_hook],
-                'prefer_ffmpeg': True,
-                'postprocessor_args': {
-                    'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+            # Méthodes anti-détection avancées
+            methods_to_try = [
+                # Méthode 1: Client Android avec throttling
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '96',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android'],
+                            'formats': 'missing_pot'
+                        }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014) gzip',
+                    },
+                    'sleep_interval': 1,
+                    'max_sleep_interval': 3,
                 },
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '96',  # Qualité réduite pour plus de vitesse
-                }],
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['android'],
-                        'formats': 'missing_pot'  # Ignorer les erreurs PO Token
-                    }
+                # Méthode 2: Client web avec cookies
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '96',
+                    }],
+                    'cookiefile': resource_path('cookies.txt'),
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['web'],
+                            'skip': ['dash', 'hls']
+                        }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none',
+                        'Sec-Fetch-User': '?1',
+                    },
+                    'sleep_interval': 2,
+                    'max_sleep_interval': 5,
                 },
-                'http_headers': {
-                    'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014) gzip',
-                    'X-YouTube-Client-Name': '3',
-                    'X-YouTube-Client-Version': '19.29.37',
+                # Méthode 3: Client TV embedded (plus permissif)
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '96',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['tv_embedded'],
+                            'skip': ['dash', 'hls']
+                        }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
+                    },
+                    'sleep_interval': 1,
+                },
+                # Méthode 4: Client iOS avec rotation d'User-Agent
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '96',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['ios'],
+                            'skip': ['dash', 'hls']
+                        }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
+                    },
+                    'sleep_interval': 2,
                 }
-            }
+            ]
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            downloaded = False
+            for i, ydl_opts in enumerate(methods_to_try):
+                try:
+                    print(f"Tentative {i+1}/4...")
+                    
+                    # Ajouter un délai aléatoire entre les tentatives
+                    if i > 0:
+                        import random
+                        time.sleep(random.uniform(1, 3))
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                    downloaded = True
+                    print(f"✅ Succès avec méthode {i+1}")
+                    break
+                except Exception as e:
+                    print(f"❌ Méthode {i+1} échoué: {str(e)[:100]}...")
+                    continue
+            
+            if not downloaded:
+                raise Exception("Toutes les méthodes ont échoué. YouTube bloque temporairement les téléchargements.")
 
             if not os.path.exists(downloaded_file_path):
                 raise Exception("Fichier MP3 non trouvé après le téléchargement.")
