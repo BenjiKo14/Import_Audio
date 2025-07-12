@@ -11,6 +11,8 @@ import sys
 import tempfile
 import ffmpeg
 
+os.environ["PATH"] += os.pathsep + os.path.abspath("/usr/bin")
+
 
 def resource_path(relative_path):
     base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
