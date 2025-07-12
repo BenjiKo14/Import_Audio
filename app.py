@@ -11,7 +11,9 @@ import sys
 import tempfile
 import ffmpeg
 
-os.environ["PATH"] += os.pathsep + os.path.abspath("/usr/bin")
+# Ajouter le chemin vers ffmpeg local au PATH
+ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
+os.environ["PATH"] += os.pathsep + ffmpeg_path
 
 
 def resource_path(relative_path):
