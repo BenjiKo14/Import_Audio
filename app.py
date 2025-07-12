@@ -5,11 +5,11 @@ import re
 import time
 import threading
 import webbrowser
-from moviepy.editor import AudioFileClip
 import glob
 import sys
 import tempfile
 import ffmpeg
+import subprocess
 
 # Ajouter le chemin vers ffmpeg local au PATH
 ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
@@ -94,146 +94,35 @@ def extract():
 
             status_data['step'] = "Récupération du lien et du timing..."
 
-            # Méthodes d'authentification optimisées pour serveur de production
-            methods_to_try = [
-                # Méthode 1: Client médiatique (souvent plus tolérant)
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['mediaconnect']
-                        }
-                    },
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5',
-                        'Accept-Encoding': 'gzip, deflate',
-                        'DNT': '1',
-                        'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1',
+            # Méthode Android optimisée (la seule qui fonctionne)
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': audio_output_path,
+                'progress_hooks': [progress_hook],
+                'prefer_ffmpeg': True,
+                'postprocessor_args': {
+                    'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'error', '-threads', '4']
+                },
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '96',  # Qualité réduite pour plus de vitesse
+                }],
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android'],
+                        'formats': 'missing_pot'  # Ignorer les erreurs PO Token
                     }
                 },
-                # Méthode 2: Client TV (moins restrictif)
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['tv_embedded']
-                        }
-                    }
-                },
-                # Méthode 3: Client iOS avec headers spécifiques
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['ios']
-                        }
-                    },
-                    'http_headers': {
-                        'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
-                        'X-YouTube-Client-Name': '5',
-                        'X-YouTube-Client-Version': '19.29.1',
-                    }
-                },
-                # Méthode 4: Client Android avec headers mobiles
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['android'],
-                            'formats': 'missing_pot'  # Ignorer les erreurs PO Token
-                        }
-                    },
-                    'http_headers': {
-                        'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014) gzip',
-                        'X-YouTube-Client-Name': '3',
-                        'X-YouTube-Client-Version': '19.29.37',
-                    }
-                },
-                # Méthode 5: Avec fichier cookies comme dernier recours
-                {
-                    'format': 'bestaudio/best',
-                    'outtmpl': audio_output_path,
-                    'progress_hooks': [progress_hook],
-                    'prefer_ffmpeg': True,
-                    'postprocessor_args': {
-                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
-                    },
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '128',
-                    }],
-                    'cookiefile': resource_path('cookies.txt'),
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['web']
-                        }
-                    }
+                'http_headers': {
+                    'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014) gzip',
+                    'X-YouTube-Client-Name': '3',
+                    'X-YouTube-Client-Version': '19.29.37',
                 }
-            ]
+            }
             
-            downloaded = False
-            for i, ydl_opts in enumerate(methods_to_try):
-                try:
-                    print(f"Essai de la méthode {i+1}...")
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-                    downloaded = True
-                    print(f"Succès avec la méthode {i+1}")
-                    break
-                except Exception as e:
-                    print(f"Méthode {i+1} échouée: {str(e)}")
-                    continue
-            
-            if not downloaded:
-                raise Exception("Toutes les méthodes de téléchargement ont échoué")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
             if not os.path.exists(downloaded_file_path):
                 raise Exception("Fichier MP3 non trouvé après le téléchargement.")
@@ -241,14 +130,46 @@ def extract():
             status_data['step'] = "Découpage de l'extrait... ✂️"
             progress_data['percent'] = '0%'
 
-            clip = AudioFileClip(downloaded_file_path).subclip(start_time, end_time)
-
+            # Utiliser ffmpeg directement pour un découpage plus rapide
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
             temp_audio_path = temp_file.name
             temp_file.close()
 
-            clip.write_audiofile(temp_audio_path, codec='libmp3lame', verbose=False, logger=None)
-            clip.close()
+            # Commande ffmpeg optimisée pour le découpage rapide
+            duration = end_time - start_time
+            
+            # Chemin vers ffmpeg local
+            local_ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
+            ffmpeg_exe = os.path.join(local_ffmpeg_path, "ffmpeg.exe") if os.name == 'nt' else "ffmpeg"
+            
+            ffmpeg_cmd = [
+                ffmpeg_exe,
+                "-i", downloaded_file_path,
+                "-ss", str(start_time),
+                "-t", str(duration),
+                "-c", "copy",  # Copie directe sans réencodage
+                "-avoid_negative_ts", "make_zero",
+                "-loglevel", "error",
+                "-y",
+                temp_audio_path
+            ]
+            
+            try:
+                subprocess.run(ffmpeg_cmd, check=True, timeout=25)  # Timeout de 25 secondes
+            except subprocess.TimeoutExpired:
+                # Fallback avec réencodage si la copie directe échoue
+                ffmpeg_cmd_fallback = [
+                    ffmpeg_exe,
+                    "-i", downloaded_file_path,
+                    "-ss", str(start_time),
+                    "-t", str(duration),
+                    "-c:a", "libmp3lame",
+                    "-b:a", "96k",
+                    "-loglevel", "error",
+                    "-y",
+                    temp_audio_path
+                ]
+                subprocess.run(ffmpeg_cmd_fallback, check=True, timeout=20)
 
         status_data['step'] = "Terminé ✅"
         progress_data['percent'] = 'done'
