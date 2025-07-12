@@ -94,9 +94,58 @@ def extract():
 
             status_data['step'] = "Récupération du lien et du timing..."
 
-            # Méthodes d'authentification à essayer dans l'ordre de priorité
+            # Méthodes d'authentification optimisées pour serveur de production
             methods_to_try = [
-                # Méthode 1: Client iOS (fonctionne bien sans PO Token)
+                # Méthode 1: Client médiatique (souvent plus tolérant)
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['mediaconnect']
+                        }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                    }
+                },
+                # Méthode 2: Client TV (moins restrictif)
+                {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }],
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['tv_embedded']
+                        }
+                    }
+                },
+                # Méthode 3: Client iOS avec headers spécifiques
                 {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
@@ -114,9 +163,14 @@ def extract():
                         'youtube': {
                             'player_client': ['ios']
                         }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
+                        'X-YouTube-Client-Name': '5',
+                        'X-YouTube-Client-Version': '19.29.1',
                     }
                 },
-                # Méthode 2: Client web basique
+                # Méthode 4: Client Android avec headers mobiles
                 {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
@@ -132,11 +186,17 @@ def extract():
                     }],
                     'extractor_args': {
                         'youtube': {
-                            'player_client': ['web']
+                            'player_client': ['android'],
+                            'formats': 'missing_pot'  # Ignorer les erreurs PO Token
                         }
+                    },
+                    'http_headers': {
+                        'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014) gzip',
+                        'X-YouTube-Client-Name': '3',
+                        'X-YouTube-Client-Version': '19.29.37',
                     }
                 },
-                # Méthode 3: Avec cookies du navigateur
+                # Méthode 5: Avec fichier cookies comme dernier recours
                 {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
@@ -150,7 +210,7 @@ def extract():
                         'preferredcodec': 'mp3',
                         'preferredquality': '128',
                     }],
-                    'cookiesfrombrowser': ('chrome',),
+                    'cookiefile': resource_path('cookies.txt'),
                     'extractor_args': {
                         'youtube': {
                             'player_client': ['web']
