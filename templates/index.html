@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Extraction MP3 YouTube</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      background-color: #fff;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .timing-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .timing-group {
+      flex: 1;
+    }
+
+    input.input-small {
+      width: 30%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #28a745;
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    .spinner {
+      display: none;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #28a745;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .progress-container {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      background-color: #eee;
+      border-radius: 5px;
+      overflow: hidden;
+      height: 20px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background-color: #28a745;
+      text-align: center;
+      color: white;
+      line-height: 20px;
+      font-size: 12px;
+      transition: width 0.3s ease;
+    }
+
+    .success-message {
+      color: green;
+      font-weight: bold;
+      margin-top: 20px;
+      font-size: 18px;
+      display: none;
+      animation: pop-in 0.3s ease-in-out;
+    }
+
+    @keyframes pop-in {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .error-message {
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+
+    #status-text {
+      font-weight: bold;
+      margin-top: 15px;
+    }
+
+    /* Style du bouton de téléchargement */
+    .download-btn {
+      display: inline-block;              /* nécessaire pour forcer un vrai 'bloc' cliquable */
+      text-decoration: none;             /* supprime le soulignement du lien */
+      cursor: pointer;                   /* le curseur sera en mode 'main' */
+      background-color: #007bff;        /* fond bleu */
+      color: #fff;                       /* texte blanc */
+      padding: 10px 20px;               /* espace interne pour ressembler à un bouton */
+      margin-top: 20px;
+      border-radius: 5px;               /* angles arrondis */
+      font-weight: bold;                /* texte plus épais */
+      transition: background-color 0.3s ease;
+    }
+
+    /* État : survol de la souris */
+    .download-btn:hover {
+      background-color: #0056b3;
+      text-decoration: none;
+    }
+
+    /* Pour bien gérer les états du lien : link, visited, hover, active */
+    .download-btn:link,
+    .download-btn:visited,
+    .download-btn:hover,
+    .download-btn:active {
+      text-decoration: none;
+      color: #fff;
+    }
+
+  </style>
+</head>
+<script>
+  setInterval(() => {
+    fetch("/ping", { method: "POST" });
+  }, 3000); // ping toutes les 3 secondes
+</script>
+<body>
+  <div class="container">
+    <h1>Extrait MP3 depuis YouTube</h1>
+    <form id="extract-form">
+      <label for="url">Lien YouTube :</label><br>
+      <input type="text" name="url" required><br>
+    
+      <div class="timing-row">
+        <div class="timing-group">
+          <label for="start">Début :</label><br>
+          <input type="text" name="start" class="input-small" placeholder="hh:mm:ss" required>
+        </div>
+    
+        <div class="timing-group">
+          <label for="end">Fin :</label><br>
+          <input type="text" name="end" class="input-small" placeholder="hh:mm:ss" required>
+        </div>
+      </div>
+    
+      <button type="submit" id="extract-btn">Extraire</button>
+    </form>
+    
+
+    <div id="spinner" class="spinner"></div>
+
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="progress-bar-fill">0%</div>
+      </div>
+    </div>
+
+    <p id="status-text"></p>
+
+    <p class="success-message" id="success-message">
+      ✅ Traitement terminé ! <br>
+      <a href="/download" class="download-btn">🎧 Télécharger le fichier MP3</a>
+    </p>
+
+    <p class="error-message" id="error-message" style="display:none;"></p>
+  </div>
+
+  <script>
+    const form = document.getElementById("extract-form");
+    const button = document.getElementById("extract-btn");
+    const spinner = document.getElementById("spinner");
+    const progressContainer = document.getElementById("progress-container");
+    const progressFill = document.getElementById("progress-bar-fill");
+    const statusText = document.getElementById("status-text");
+    const successMsg = document.getElementById("success-message");
+    const errorMsg = document.getElementById("error-message");
+
+    let progressInterval;
+    let statusInterval;
+
+    function startProgressPoll() {
+      progressInterval = setInterval(() => {
+        fetch("/progress")
+          .then(res => res.json())
+          .then(data => {
+            const percent = data.percent;
+
+            if (percent !== "0%" && percent !== "convert" && percent !== "done") {
+              spinner.style.display = "none";
+              progressContainer.style.display = "block";
+              progressFill.style.width = percent;
+              progressFill.innerText = percent;
+            } else {
+              progressContainer.style.display = "none";
+              progressFill.style.width = "0%";
+              progressFill.innerText = "0%";
+              spinner.style.display = "block";
+            }
+          });
+      }, 500);
+    }
+
+    function startStatusPoll() {
+      statusInterval = setInterval(() => {
+        fetch("/status")
+          .then(res => res.json())
+          .then(data => {
+            statusText.innerText = data.step;
+          });
+      }, 500);
+    }
+
+    form.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      // Reset UI
+      spinner.style.display = "block";
+      progressContainer.style.display = "none";
+      progressFill.style.width = "0%";
+      progressFill.innerText = "0%";
+      statusText.innerText = "";
+      successMsg.style.display = "none";
+      errorMsg.style.display = "none";
+      button.style.display = "none";
+
+      startProgressPoll();
+      startStatusPoll();
+
+      const formData = new FormData(form);
+
+      fetch("/extract", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        clearInterval(progressInterval);
+        clearInterval(statusInterval);
+
+        spinner.style.display = "none";
+        progressContainer.style.display = "none";
+        button.style.display = "inline-block";
+
+        if (data.success) {
+          successMsg.style.display = "block";
+          statusText.innerText = "✅ Fichier prêt à être téléchargé !";
+        } else {
+          errorMsg.innerText = "Erreur : " + data.error;
+          errorMsg.style.display = "block";
+        }
+      })
+      .catch(err => {
+        clearInterval(progressInterval);
+        clearInterval(statusInterval);
+
+        spinner.style.display = "none";
+        progressContainer.style.display = "none";
+        button.style.display = "inline-block";
+
+        errorMsg.innerText = "Erreur réseau : " + err.message;
+        errorMsg.style.display = "block";
+      });
+    });
+  </script>
+</body>
+</html>
