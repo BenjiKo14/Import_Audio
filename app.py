@@ -100,6 +100,7 @@ def extract():
                 'postprocessor_args': {
                     'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
                 },
+                'cookiefile': resource_path('cookies.txt'),
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
