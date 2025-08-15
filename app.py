@@ -60,6 +60,12 @@ def ping():
     last_ping = time.time()
     return '', 204
 
+@app.route('/download-start', methods=['POST'])
+def download_start():
+    global last_ping
+    last_ping = time.time()  # Reset le timer quand le téléchargement commence
+    return '', 204
+
 @app.route('/extract', methods=['POST'])
 def extract():
     global temp_audio_path
@@ -213,7 +219,7 @@ def monitor_browser():
     global last_ping
     while True:
         time.sleep(5)
-        if time.time() - last_ping > 10:
+        if time.time() - last_ping > 60:  # Augmenté à 60 secondes
             print("Navigateur fermé. Arrêt du serveur...")
             os._exit(0)
 
