@@ -5,23 +5,16 @@ import re
 import time
 import threading
 import webbrowser
+from moviepy.editor import AudioFileClip
+import glob
 import sys
 import tempfile
-import subprocess
-import random
-from datetime import datetime
-import requests
-import json
-from urllib.parse import parse_qs, urlparse
+import ffmpeg
 
-# Configuration pour le chemin des ressources
+
 def resource_path(relative_path):
     base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
     return os.path.join(base_path, relative_path)
-
-# Configuration ffmpeg local
-ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
-os.environ["PATH"] += os.pathsep + ffmpeg_path
 
 def open_browser():
     webbrowser.open_new("http://localhost:5000")
@@ -32,10 +25,10 @@ app = Flask(
     static_folder=resource_path('static')
 )
 
-# Variables globales pour le suivi
 progress_data = {'percent': '0%'}
 status_data = {'step': 'En attente...'}
-temp_audio_path = None
+last_ping = time.time()
+temp_audio_path = None  # fichier temporaire
 
 def clean_ansi(text):
     return re.sub(r'\x1b\[[0-9;]*m', '', text)
@@ -49,244 +42,6 @@ def progress_hook(d):
         progress_data['percent'] = 'convert'
         status_data['step'] = "Conversion audio en cours... 🎧"
 
-def get_random_user_agent():
-    """Génère un User-Agent aléatoire pour éviter la détection"""
-    agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    ]
-    return random.choice(agents)
-
-def extract_video_id(url):
-    """Extrait l'ID de la vidéo depuis l'URL YouTube"""
-    patterns = [
-        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
-        r'(?:embed\/)([0-9A-Za-z_-]{11})',
-        r'(?:watch\?v=)([0-9A-Za-z_-]{11})',
-        r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    return None
-
-def download_with_cobalt_api(video_id, output_dir):
-    """Télécharge avec l'API Cobalt (co.wuk.sh)"""
-    try:
-        api_url = "https://co.wuk.sh/api/json"
-        headers = {
-            'User-Agent': get_random_user_agent(),
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-        }
-        
-        payload = {
-            "url": f"https://www.youtube.com/watch?v={video_id}",
-            "vCodec": "mp3",
-            "vQuality": "128",
-            "aFormat": "mp3",
-            "isAudioOnly": True
-        }
-        
-        print("[INFO] Tentative avec Cobalt API...")
-        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 'success' and data.get('url'):
-                audio_url = data['url']
-                return download_file_from_url(audio_url, output_dir, 'audio.mp3')
-                
-    except Exception as e:
-        print(f"[WARN] Cobalt API échouée: {str(e)[:100]}...")
-    
-    return None
-
-def download_with_invidious_api(video_id, output_dir):
-    """Télécharge avec l'API Invidious"""
-    invidious_instances = [
-        "https://invidious.fdn.fr",
-        "https://inv.riverside.rocks",
-        "https://invidious.snopyta.org",
-        "https://invidious.kavin.rocks",
-        "https://vid.puffyan.us"
-    ]
-    
-    for instance in invidious_instances:
-        try:
-            print(f"[INFO] Tentative avec Invidious: {instance}")
-            
-            # Obtenir les informations de la vidéo
-            api_url = f"{instance}/api/v1/videos/{video_id}"
-            headers = {'User-Agent': get_random_user_agent()}
-            
-            response = requests.get(api_url, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Rechercher le meilleur format audio
-                audio_formats = [f for f in data.get('adaptiveFormats', []) if f.get('type', '').startswith('audio/')]
-                
-                if audio_formats:
-                    # Prendre le format avec la meilleure qualité
-                    best_audio = max(audio_formats, key=lambda x: x.get('bitrate', 0))
-                    audio_url = best_audio['url']
-                    
-                    return download_file_from_url(audio_url, output_dir, 'audio.mp4')
-                    
-        except Exception as e:
-            print(f"[WARN] Invidious {instance} échoué: {str(e)[:100]}...")
-            continue
-    
-    return None
-
-def download_file_from_url(url, output_dir, filename):
-    """Télécharge un fichier depuis une URL"""
-    try:
-        headers = {
-            'User-Agent': get_random_user_agent(),
-            'Accept': '*/*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-        }
-        
-        print(f"[INFO] Téléchargement du fichier audio...")
-        
-        response = requests.get(url, headers=headers, stream=True, timeout=60)
-        response.raise_for_status()
-        
-        file_path = os.path.join(output_dir, filename)
-        
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-        
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            print(f"[SUCCESS] Fichier téléchargé: {file_path}")
-            return file_path
-        
-    except Exception as e:
-        print(f"[WARN] Téléchargement direct échoué: {str(e)[:100]}...")
-    
-    return None
-
-def download_with_yt_dlp_fallback(url, output_dir):
-    """Méthode de fallback avec yt-dlp (version simplifiée)"""
-    try:
-        print("[INFO] Tentative avec yt-dlp (fallback)...")
-        
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(output_dir, 'audio.%(ext)s'),
-            'progress_hooks': [progress_hook],
-            'extract_flat': False,
-            'no_warnings': True,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['tv_embedded'],
-                }
-            },
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1',
-            },
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        
-        # Vérifier si le fichier a été créé
-        for f in os.listdir(output_dir):
-            if f.startswith('audio.') and os.path.getsize(os.path.join(output_dir, f)) > 0:
-                return os.path.join(output_dir, f)
-                
-    except Exception as e:
-        print(f"[WARN] yt-dlp fallback échoué: {str(e)[:100]}...")
-    
-    return None
-
-def download_youtube_audio(url, output_dir):
-    """Télécharge l'audio depuis YouTube en utilisant plusieurs APIs"""
-    
-    # Extraire l'ID de la vidéo
-    video_id = extract_video_id(url)
-    if not video_id:
-        raise Exception("Impossible d'extraire l'ID de la vidéo depuis l'URL")
-    
-    print(f"[INFO] ID de la vidéo: {video_id}")
-    
-    # Essayer différentes méthodes dans l'ordre
-    methods = [
-        ("Cobalt API", lambda: download_with_cobalt_api(video_id, output_dir)),
-        ("Invidious API", lambda: download_with_invidious_api(video_id, output_dir)),
-        ("yt-dlp fallback", lambda: download_with_yt_dlp_fallback(url, output_dir)),
-    ]
-    
-    for method_name, method_func in methods:
-        try:
-            print(f"[INFO] === Essai avec {method_name} ===")
-            result = method_func()
-            
-            if result and os.path.exists(result):
-                print(f"[SUCCESS] ✅ {method_name} a réussi!")
-                return result
-            else:
-                print(f"[WARN] ❌ {method_name} n'a pas produit de fichier")
-                
-        except Exception as e:
-            print(f"[WARN] ❌ {method_name} échoué: {str(e)[:100]}...")
-        
-        # Attendre entre les tentatives
-        time.sleep(random.uniform(1, 3))
-    
-    # Si toutes les méthodes échouent
-    raise Exception("Toutes les méthodes de téléchargement ont échoué. Le contenu pourrait être protégé ou temporairement indisponible.")
-
-def cut_audio_ffmpeg(input_path, output_path, start_time, end_time):
-    """Découpe l'audio avec ffmpeg"""
-    duration = end_time - start_time
-    
-    # Chemin vers ffmpeg
-    ffmpeg_exe = os.path.join(ffmpeg_path, "ffmpeg.exe") if os.name == 'nt' else "ffmpeg"
-    
-    # Commande ffmpeg pour découpage rapide
-    cmd = [
-        ffmpeg_exe,
-        '-i', input_path,
-        '-ss', str(start_time),
-        '-t', str(duration),
-        '-c', 'copy',  # Copie sans réencodage pour plus de vitesse
-        '-avoid_negative_ts', 'make_zero',
-        '-loglevel', 'quiet',
-        '-y',
-        output_path
-    ]
-    
-    try:
-        subprocess.run(cmd, check=True, timeout=30)
-        return True
-    except subprocess.TimeoutExpired:
-        # Fallback avec réencodage si nécessaire
-        cmd_fallback = [
-            ffmpeg_exe,
-            '-i', input_path,
-            '-ss', str(start_time),
-            '-t', str(duration),
-            '-c:a', 'libmp3lame',
-            '-b:a', '128k',
-            '-loglevel', 'quiet',
-            '-y',
-            output_path
-        ]
-        subprocess.run(cmd_fallback, check=True, timeout=45)
-        return True
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -299,14 +54,26 @@ def progress():
 def status():
     return jsonify(status_data)
 
+@app.route('/ping', methods=['POST'])
+def ping():
+    global last_ping
+    last_ping = time.time()
+    return '', 204
+
 @app.route('/extract', methods=['POST'])
 def extract():
     global temp_audio_path
-    
-    url = request.form['url']
+
+    mode = request.form['mode']
     start = request.form['start']
     end = request.form['end']
-    
+
+    # Liste des extensions autorisées
+    ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'aac', 'mp4', 'avi', 'mkv'}
+
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
     def parse_time(t):
         parts = list(map(int, t.strip().split(":")))
         if len(parts) == 1:
@@ -316,73 +83,141 @@ def extract():
         elif len(parts) == 3:
             return parts[0] * 3600 + parts[1] * 60 + parts[2]
         else:
-            raise ValueError("Format de temps invalide")
-    
+            raise ValueError("Format de temps invalide (hh:mm:ss, mm:ss ou ss)")
+
+    start_time = parse_time(start)
+    end_time = parse_time(end)
+
     try:
-        start_time = parse_time(start)
-        end_time = parse_time(end)
-        
-        if start_time >= end_time:
-            raise ValueError("L'heure de début doit être inférieure à l'heure de fin")
-        
-        # Réinitialisation des variables
-        progress_data['percent'] = '0%'
-        status_data['step'] = 'Initialisation...'
-        
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Téléchargement
-            status_data['step'] = 'Téléchargement de la vidéo... 📥'
-            
-            # Télécharger l'audio
-            input_audio = download_youtube_audio(url, temp_dir)
-            
-            if not input_audio or not os.path.exists(input_audio):
-                raise Exception("Échec du téléchargement ou fichier non trouvé")
-            
-            # Découpage
-            status_data['step'] = 'Découpage de l\'extrait... ✂️'
-            progress_data['percent'] = 'convert'
-            
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            temp_audio_path = temp_file.name
-            temp_file.close()
-            
-            if not cut_audio_ffmpeg(input_audio, temp_audio_path, start_time, end_time):
-                raise Exception("Échec du découpage")
-            
-            # Finalisation
-            status_data['step'] = 'Terminé ✅'
-            progress_data['percent'] = 'done'
-            
-            return jsonify({"success": True})
-            
+            if mode == 'youtube':
+                url = request.form['url']
+                # Chemin de sortie temporaire pour yt-dlp
+                audio_output_path = os.path.join(temp_dir, "audio.%(ext)s")
+                downloaded_file_path = os.path.join(temp_dir, "audio.mp3")
+
+                status_data['step'] = "Récupération du lien et du timing..."
+
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'outtmpl': audio_output_path,
+                    'progress_hooks': [progress_hook],
+                    'prefer_ffmpeg': True,
+                    'ffmpeg_location': os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg', 'bin', 'ffmpeg.exe'),
+                    'postprocessor_args': {
+                        'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
+                    },
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '128',
+                    }]
+                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    video_title = info.get('title', 'video')
+                    # Nettoyer le titre pour le rendre compatible avec les noms de fichiers
+                    video_title = "".join(c for c in video_title if c.isalnum() or c in (' ', '-', '_')).strip()
+                    ydl.download([url])
+
+                if not os.path.exists(downloaded_file_path):
+                    raise Exception("Fichier MP3 non trouvé après le téléchargement.")
+                
+                input_file = downloaded_file_path
+                output_filename = f"{video_title}_{start}-{end}.mp3"
+            else:
+                if 'audio-file' not in request.files:
+                    raise Exception("Aucun fichier n'a été uploadé")
+                
+                audio_file = request.files['audio-file']
+                if audio_file.filename == '':
+                    raise Exception("Aucun fichier sélectionné")
+                
+                if not allowed_file(audio_file.filename):
+                    raise Exception("Format de fichier non supporté. Formats acceptés : MP3, WAV, M4A, AAC")
+                
+                # Obtenir le nom du fichier sans extension
+                original_filename = os.path.splitext(audio_file.filename)[0]
+                input_file = os.path.join(temp_dir, "uploaded_audio" + os.path.splitext(audio_file.filename)[1])
+                audio_file.save(input_file)
+                status_data['step'] = "Fichier uploadé avec succès"
+                output_filename = f"{original_filename}_{start}-{end}.mp3"
+
+            status_data['step'] = "Découpage de l'extrait... ✂️"
+            progress_data['percent'] = '0%'
+
+            try:
+                clip = AudioFileClip(input_file)
+                clip_duration = clip.duration
+                
+                # Vérifier si les timings sont valides
+                if start_time >= clip_duration or end_time > clip_duration:
+                    clip.close()
+                    raise ValueError(f"La durée du fichier est de {int(clip_duration//60)}:{int(clip_duration%60):02d}. Veuillez choisir une plage de temps valide.")
+                
+                clip = clip.subclip(start_time, end_time)
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+                temp_audio_path = temp_file.name
+                temp_file.close()
+
+                clip.write_audiofile(temp_audio_path, codec='libmp3lame', verbose=False, logger=None)
+                clip.close()
+            except ValueError as e:
+                if 'clip' in locals():
+                    clip.close()
+                raise ValueError(str(e))
+            except Exception as e:
+                if 'clip' in locals():
+                    clip.close()
+                if "Accessing time" in str(e):
+                    raise ValueError(f"La durée du fichier est de {int(clip_duration//60)}:{int(clip_duration%60):02d}. Veuillez choisir une plage de temps valide.")
+                raise e
+
+        status_data['step'] = "Terminé ✅"
+        progress_data['percent'] = 'done'
+        return jsonify({"success": True, "filename": output_filename})
+
     except Exception as e:
-        error_msg = str(e)
-        status_data['step'] = f'Erreur: {error_msg}'
-        progress_data['percent'] = '0%'
-        return jsonify({"success": False, "error": error_msg})
+        status_data['step'] = f"Erreur : {str(e)}"
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        # S'assurer que tous les fichiers sont fermés
+        if 'clip' in locals():
+            try:
+                clip.close()
+            except:
+                pass
 
 @app.route('/download')
 def download():
     global temp_audio_path
-    
+
     if temp_audio_path and os.path.exists(temp_audio_path):
         path = temp_audio_path
-        temp_audio_path = None
-        
-        # Suppression différée du fichier
+        temp_audio_path = None  # Reset avant suppression
+
         def delete_file_later(p):
-            time.sleep(10)
+            time.sleep(5)
             try:
                 os.remove(p)
-            except:
+            except Exception:
                 pass
-        
+
         threading.Thread(target=delete_file_later, args=(path,), daemon=True).start()
-        return send_file(path, as_attachment=True, download_name=f"extrait_audio_{int(time.time())}.mp3")
-    
+        return send_file(path, as_attachment=True, download_name=request.args.get('filename', 'extrait_audio.mp3'))
+
     return "Fichier introuvable", 404
 
+def monitor_browser():
+    global last_ping
+    while True:
+        time.sleep(5)
+        if time.time() - last_ping > 10:
+            print("Navigateur fermé. Arrêt du serveur...")
+            os._exit(0)
+
 if __name__ == '__main__':
+    threading.Thread(target=monitor_browser, daemon=True).start()
     threading.Timer(1, open_browser).start()
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=False)

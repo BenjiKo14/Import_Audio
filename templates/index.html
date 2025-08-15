@@ -130,27 +130,22 @@
       margin-top: 15px;
     }
 
-    /* Style du bouton de téléchargement */
     .download-btn {
-      display: inline-block;              /* nécessaire pour forcer un vrai 'bloc' cliquable */
-      text-decoration: none;             /* supprime le soulignement du lien */
-      cursor: pointer;                   /* le curseur sera en mode 'main' */
-      background-color: #007bff;        /* fond bleu */
-      color: #fff;                       /* texte blanc */
-      padding: 10px 20px;               /* espace interne pour ressembler à un bouton */
+      display: inline-block;
+      text-decoration: none;
+      cursor: pointer;
+      background-color: #007bff;
+      color: #fff;
+      padding: 10px 20px;
       margin-top: 20px;
-      border-radius: 5px;               /* angles arrondis */
-      font-weight: bold;                /* texte plus épais */
+      border-radius: 5px;
+      font-weight: bold;
       transition: background-color 0.3s ease;
     }
-
-    /* État : survol de la souris */
     .download-btn:hover {
       background-color: #0056b3;
       text-decoration: none;
     }
-
-    /* Pour bien gérer les états du lien : link, visited, hover, active */
     .download-btn:link,
     .download-btn:visited,
     .download-btn:hover,
@@ -158,31 +153,33 @@
       text-decoration: none;
       color: #fff;
     }
-
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Extrait MP3 depuis YouTube</h1>
+
     <form id="extract-form">
+      <!-- Champ caché pour le mode -->
+      <input type="hidden" name="mode" value="youtube">
+
       <label for="url">Lien YouTube :</label><br>
       <input type="text" name="url" required><br>
-    
+
       <div class="timing-row">
         <div class="timing-group">
           <label for="start">Début :</label><br>
           <input type="text" name="start" class="input-small" placeholder="hh:mm:ss" required>
         </div>
-    
+
         <div class="timing-group">
           <label for="end">Fin :</label><br>
           <input type="text" name="end" class="input-small" placeholder="hh:mm:ss" required>
         </div>
       </div>
-    
+
       <button type="submit" id="extract-btn">Extraire</button>
     </form>
-    
 
     <div id="spinner" class="spinner"></div>
 
@@ -214,6 +211,15 @@
 
     let progressInterval;
     let statusInterval;
+
+    // Heartbeat vers /ping pour garder le serveur vivant
+    let pingTimer = setInterval(() => {
+      fetch("/ping", { method: "POST" }).catch(() => {});
+    }, 5000);
+
+    window.addEventListener("beforeunload", () => {
+      clearInterval(pingTimer);
+    });
 
     function startProgressPoll() {
       progressInterval = setInterval(() => {
@@ -279,23 +285,20 @@
         button.style.display = "inline-block";
 
         if (data.success) {
+          // Met à jour le lien et affiche le message
+          const a = successMsg.querySelector('a.download-btn');
+          const url = `/download?filename=${encodeURIComponent(data.filename)}`;
+          a.href = url;
           successMsg.style.display = "block";
           statusText.innerText = "✅ Fichier prêt à être téléchargé !";
+
+          // ⬇️ DÉCLENCHEMENT AUTO DU TÉLÉCHARGEMENT
+          a.click();                 // ① simule un clic
+          // window.location.href = url; // (option alternative)
         } else {
           errorMsg.innerText = "Erreur : " + data.error;
           errorMsg.style.display = "block";
         }
-      })
-      .catch(err => {
-        clearInterval(progressInterval);
-        clearInterval(statusInterval);
-
-        spinner.style.display = "none";
-        progressContainer.style.display = "none";
-        button.style.display = "inline-block";
-
-        errorMsg.innerText = "Erreur réseau : " + err.message;
-        errorMsg.style.display = "block";
       });
     });
   </script>
