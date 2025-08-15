@@ -19,9 +19,15 @@ def resource_path(relative_path):
     base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
     return os.path.join(base_path, relative_path)
 
-# Configuration ffmpeg local
-ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
-os.environ["PATH"] += os.pathsep + ffmpeg_path
+# Détermination du binaire ffmpeg selon l'OS
+def get_ffmpeg_cmd():
+    if os.name == "nt":
+        ffmpeg_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
+        os.environ["PATH"] += os.pathsep + ffmpeg_dir
+        return os.path.join(ffmpeg_dir, "ffmpeg.exe")
+    return "ffmpeg"
+
+FFMPEG_CMD = get_ffmpeg_cmd()
 
 def open_browser():
     webbrowser.open_new("http://localhost:5000")
@@ -251,13 +257,10 @@ def download_youtube_audio(url, output_dir):
 def cut_audio_ffmpeg(input_path, output_path, start_time, end_time):
     """Découpe l'audio avec ffmpeg"""
     duration = end_time - start_time
-    
-    # Chemin vers ffmpeg
-    ffmpeg_exe = os.path.join(ffmpeg_path, "ffmpeg.exe") if os.name == 'nt' else "ffmpeg"
-    
+
     # Commande ffmpeg pour découpage rapide
     cmd = [
-        ffmpeg_exe,
+        FFMPEG_CMD,
         '-i', input_path,
         '-ss', str(start_time),
         '-t', str(duration),
@@ -274,7 +277,7 @@ def cut_audio_ffmpeg(input_path, output_path, start_time, end_time):
     except subprocess.TimeoutExpired:
         # Fallback avec réencodage si nécessaire
         cmd_fallback = [
-            ffmpeg_exe,
+            FFMPEG_CMD,
             '-i', input_path,
             '-ss', str(start_time),
             '-t', str(duration),
