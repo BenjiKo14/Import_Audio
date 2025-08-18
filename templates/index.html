@@ -226,18 +226,63 @@
       text-decoration: none;
       color: #fff;
     }
+
+    .mode-selector {
+      margin-bottom: 20px;
+      display: inline-block;
+      width: auto;
+      min-width: 200px;
+      text-align: center;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: white;
+      font-size: 14px;
+      text-align: center;
+      text-align-last: center;
+    }
+
+    select option {
+      text-align: center;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Extrait MP3 depuis YouTube</h1>
+    <h1>Extraction Audio</h1>
 
     <form id="extract-form">
-      <!-- Champ caché pour le mode -->
-      <input type="hidden" name="mode" value="youtube">
+      <div class="mode-selector">
+        <label>Source :</label><br>
+        <select name="mode" id="mode-select" required>
+          <option value="youtube">Lien YouTube</option>
+          <option value="upload">Upload de fichier</option>
+        </select>
+      </div>
 
-      <label for="url">Lien YouTube :</label><br>
-      <input type="text" name="url" required><br>
+      <div id="youtube-input">
+        <label for="url">Lien YouTube :</label><br>
+        <input type="text" name="url"><br>
+      </div>
+
+      <div id="file-input" style="display: none;">
+        <label for="audio-file">Fichier audio :</label><br>
+        <input type="file" name="audio-file" accept="audio/*"><br>
+      </div>
 
       <div class="timing-row">
         <div class="timing-group">
@@ -329,6 +374,10 @@
     const statusText = document.getElementById("status-text");
     const successMsg = document.getElementById("success-message");
     const errorMsg = document.getElementById("error-message");
+    const modeSelect = document.getElementById("mode-select");
+    const youtubeInput = document.getElementById("youtube-input");
+    const fileInput = document.getElementById("file-input");
+    const urlInput = document.querySelector('input[name="url"]');
 
     let progressInterval;
     let statusInterval;
@@ -341,6 +390,31 @@
     window.addEventListener("beforeunload", () => {
       clearInterval(pingTimer);
     });
+
+    // Fonction pour réinitialiser l'interface
+    function resetUI() {
+      spinner.style.display = "none";
+      progressContainer.style.display = "none";
+      button.disabled = false;
+      clearInterval(progressInterval);
+      clearInterval(statusInterval);
+    }
+
+    // Vérification du mode au chargement de la page
+    function updateInputVisibility() {
+      if (modeSelect.value === 'youtube') {
+        youtubeInput.style.display = 'block';
+        fileInput.style.display = 'none';
+        urlInput.required = true;
+      } else {
+        youtubeInput.style.display = 'none';
+        fileInput.style.display = 'block';
+        urlInput.required = false;
+      }
+    }
+
+    // Appeler la fonction au chargement
+    updateInputVisibility();
 
 
 
@@ -378,6 +452,10 @@
     // Initialiser les champs cachés
     updateHiddenTimeFields();
 
+    modeSelect.addEventListener('change', function() {
+      updateInputVisibility();
+    });
+
     function startProgressPoll() {
       progressInterval = setInterval(() => {
         fetch("/progress")
@@ -410,23 +488,38 @@
       }, 500);
     }
 
-    form.addEventListener("submit", function(event) {
-      event.preventDefault();
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData();
+      const mode = modeSelect.value;
+      
+      if (mode === 'youtube') {
+        formData.append('url', urlInput.value);
+      } else {
+        const fileInput = document.querySelector('input[name="audio-file"]');
+        if (fileInput.files.length > 0) {
+          formData.append('audio-file', fileInput.files[0]);
+        } else {
+          alert('Veuillez sélectionner un fichier audio');
+          return;
+        }
+      }
+      
+      formData.append('start', document.querySelector('input[name="start"]').value);
+      formData.append('end', document.querySelector('input[name="end"]').value);
+      formData.append('mode', mode);
 
-      // Reset UI
+      // Réinitialiser l'affichage
       spinner.style.display = "block";
       progressContainer.style.display = "none";
-      progressFill.style.width = "0%";
-      progressFill.innerText = "0%";
-      statusText.innerText = "";
       successMsg.style.display = "none";
       errorMsg.style.display = "none";
-      button.style.display = "none";
+      button.disabled = true;
 
+      // Démarrer le polling
       startProgressPoll();
       startStatusPoll();
-
-      const formData = new FormData(form);
 
       fetch("/extract", {
         method: "POST",
@@ -434,23 +527,17 @@
       })
       .then(res => res.json())
       .then(data => {
-        clearInterval(progressInterval);
-        clearInterval(statusInterval);
-
-        spinner.style.display = "none";
-        progressContainer.style.display = "none";
-        button.style.display = "inline-block";
+        resetUI();
 
         if (data.success) {
-          // Met à jour le lien et affiche le message
-          const a = successMsg.querySelector('a.download-btn');
-          const url = `/download?filename=${encodeURIComponent(data.filename)}`;
-          a.href = url;
           successMsg.style.display = "block";
           statusText.innerText = "✅ Fichier prêt à être téléchargé !";
-
+          // Mettre à jour le lien de téléchargement avec le nom de fichier
+          const downloadLink = document.querySelector('.download-btn');
+          downloadLink.href = `/download?filename=${encodeURIComponent(data.filename)}`;
+          
           // ⬇️ DÉCLENCHEMENT AUTO DU TÉLÉCHARGEMENT
-          a.click();                 // ① simule un clic
+          downloadLink.click();
           
           // Notifier le serveur que le téléchargement commence
           fetch("/download-start", { method: "POST" }).catch(() => {});
@@ -464,12 +551,15 @@
           setTimeout(() => {
             clearInterval(downloadPingInterval);
           }, 300000); // 5 minutes
-          
-          // window.location.href = url; // (option alternative)
         } else {
           errorMsg.innerText = "Erreur : " + data.error;
           errorMsg.style.display = "block";
         }
+      })
+      .catch(err => {
+        resetUI();
+        errorMsg.innerText = "Erreur réseau : " + err.message;
+        errorMsg.style.display = "block";
       });
     });
   </script>
