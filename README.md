@@ -48,7 +48,7 @@ yt-dlp>=2025.1.1
 ```powershell
 # Option 1 : Télécharger le ZIP
 # Option 2 : Cloner le repository
-git clone https://github.com/your-username/Import_Audio.git
+git clone https://https://github.com/BenjiKo14/Import_Audio
 cd Import_Audio
 ```
 
