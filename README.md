@@ -193,13 +193,6 @@ python3 version_tkinter.py
 
 </details>
 
-<details>
-<summary><strong>Nom de fichier non valide sous Windows</strong></summary>
-
-**Solution :**
-- L'application remplace automatiquement les caractères interdits (`:`, `\`, `/`, …)
-
-</details>
 
 <details>
 <summary><strong>Tkinter sur macOS</strong></summary>
