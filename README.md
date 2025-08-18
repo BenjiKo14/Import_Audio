@@ -52,6 +52,19 @@ git clone https://https://github.com/BenjiKo14/Import_Audio
 cd Import_Audio
 ```
 
+### 🔄 Mettre à jour le projet (si déjà en local)
+
+```powershell
+# Se placer dans le dossier du projet
+cd Import_Audio
+
+# Récupérer les dernières modifications
+git pull origin main
+
+# Mettre à jour les dépendances si nécessaire
+pip install -r requirements.txt --upgrade
+```
+
 ### 2️⃣ Créer un environnement virtuel
 
 
@@ -62,7 +75,7 @@ python -m venv venv
 venv\Scripts\activate
 ```
 
-</details>
+
 
 
 <summary><strong>🔹macOS</strong></summary>
