@@ -54,8 +54,8 @@ cd Import_Audio
 
 ### 2️⃣ Créer un environnement virtuel
 
-<details>
-<summary><strong>Windows</strong></summary>
+
+<summary><strong>🔹Windows</strong></summary>
 
 ```powershell
 python -m venv venv
@@ -64,8 +64,8 @@ venv\Scripts\activate
 
 </details>
 
-<details>
-<summary><strong>macOS</strong></summary>
+
+<summary><strong>🔹macOS</strong></summary>
 
 ```powershell
 python3 -m venv venv
@@ -128,8 +128,8 @@ Télécharger un binaire signé depuis [evermeet.cx](https://evermeet.cx/ffmpeg/
 
 ## 🚀 Lancement de l'application
 
-<details>
-<summary><strong>Windows</strong></summary>
+
+<summary><strong>🔹Windows</strong></summary>
 
 ```powershell
 python version_tkinter.py
@@ -137,8 +137,8 @@ python version_tkinter.py
 
 </details>
 
-<details>
-<summary><strong>macOS</strong></summary>
+
+<summary><strong>🔹macOS</strong></summary>
 
 ```powershell
 python3 version_tkinter.py
