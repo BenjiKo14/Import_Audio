@@ -331,20 +331,30 @@ class ExtractWorker(threading.Thread):
                     audio_output_path = os.path.join(temp_dir, "audio.%(ext)s")
                     downloaded_file_path_mp3 = os.path.join(temp_dir, "audio.mp3")
 
+                    # Options yt-dlp durcies pour contourner SABR/Signature (client Android) + cookies
+                    cookies_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': audio_output_path,
                         'progress_hooks': [self.yt_progress_hook],
                         'prefer_ffmpeg': True,
+                        'noplaylist': True,
+                        'extractor_args': {
+                            'youtube': {
+                                'player_client': ['android']
+                            }
+                        },
                         'postprocessors': [{
                             'key': 'FFmpegExtractAudio',
                             'preferredcodec': 'mp3',
                             'preferredquality': '128',
                         }],
                     }
-                    # Si on a ./ffmpeg/bin, le fournir à yt-dlp
                     if self.ffmpeg_dir:
                         ydl_opts['ffmpeg_location'] = self.ffmpeg_dir
+                    if os.path.exists(cookies_path):
+                        ydl_opts['cookiefile'] = cookies_path
+                    # ffmpeg_location déjà ajouté si nécessaire
 
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(self.url, download=False)

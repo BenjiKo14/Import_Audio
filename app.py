@@ -17,7 +17,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def open_browser():
-    webbrowser.open_new("http://localhost:5000")
+    webbrowser.open_new("http://localhost:5005")
 
 # ---- Initialisation Flask ----
 app = Flask(
@@ -155,12 +155,20 @@ def extract():
 
                 status_data['step'] = "Récupération du lien et du timing..."
 
+                # Options yt-dlp durcies pour contourner SABR/Signature (client Android) + cookies
+                cookies_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'outtmpl': audio_output_path,
                     'progress_hooks': [progress_hook],
                     'prefer_ffmpeg': True,
                     'ffmpeg_location': FFMPEG_DIR,
+                    'noplaylist': True,
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android']
+                        }
+                    },
                     'postprocessor_args': {
                         'ffmpeg': ['-preset', 'ultrafast', '-loglevel', 'info']
                     },
@@ -170,6 +178,8 @@ def extract():
                         'preferredquality': '128',
                     }]
                 }
+                if os.path.exists(cookies_path):
+                    ydl_opts['cookiefile'] = cookies_path
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)

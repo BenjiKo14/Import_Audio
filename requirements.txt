@@ -1,5 +1,5 @@
 yt-dlp>=2025.1.1
-tkinter
+#tkinter
 
 # ffmpeg doit être installé séparément :
 #   - Windows : placer ffmpeg.exe dans ./ffmpeg/bin
